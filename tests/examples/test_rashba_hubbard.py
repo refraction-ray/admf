@@ -78,16 +78,24 @@ for i, site in enumerate(generate_lattice(nx, ny)):
     loc[site] = i  # index dict
 uloc = [i for i in loc if i[3] == 0]
 
-kinetic = np.zeros([len(loc), len(loc)], dtype=np.complex64)
-rashbaterm = np.zeros([len(loc), len(loc)], dtype=np.complex64)
-uuaterm = np.zeros([len(loc), len(loc)], dtype=np.complex64)
-ddaterm = np.zeros([len(loc), len(loc)], dtype=np.complex64)
-uubterm = np.zeros([len(loc), len(loc)], dtype=np.complex64)
-ddbterm = np.zeros([len(loc), len(loc)], dtype=np.complex64)
-udaterm = np.zeros([len(loc), len(loc)], dtype=np.complex64)
-duaterm = np.zeros([len(loc), len(loc)], dtype=np.complex64)
-udbterm = np.zeros([len(loc), len(loc)], dtype=np.complex64)
-dubterm = np.zeros([len(loc), len(loc)], dtype=np.complex64)
+
+def generate_zeros(n, size, dtype=np.complex64):
+    return [np.zeros([size, size], dtype=dtype) for _ in range(n)]
+
+
+(
+    kinetic,
+    rashbaterm,
+    uuaterm,
+    ddaterm,
+    uubterm,
+    ddbterm,
+    udaterm,
+    duaterm,
+    udbterm,
+    dubterm,
+) = generate_zeros(10, len(loc))
+
 
 for site in loc:
     for hopsite in nn(site, nx, ny):
@@ -156,7 +164,7 @@ const_params = const(1.0, 1.0, 6.0, 5.0)
 init_params = var(0.0, 0.5, 0.5, 0.0, 0.0, 0.0, 0.0)
 
 
-def test_honeycomb_rashba_hubbar():
+def test_honeycomb_rashba_hubbard():
     var_params = mf_optimize(hansatz, h, hint, const_params, init_params, 200, 50)
     f, _ = get_fe(hansatz, h, hint)
     assert f(const_params, var_params) < -65.0

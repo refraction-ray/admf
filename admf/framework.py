@@ -46,7 +46,9 @@ def mf_optimize(
     init_params,
     num_iter,
     verbose_sep=0,
+    verbose_func=None,
     optimizer="adam",
+    step_size=0.01,
 ):
     """
 
@@ -61,11 +63,14 @@ def mf_optimize(
     :param init_params: NamedTuple, var. variables in Hansatz that is ready to be tuned for optimizations.
     :param num_iter: int. Iteration steps.
     :param verbose_sep: int. default 0 no verbose message in the training.
+    :param verbose_func: Callable[[NamedTuple, NamedTuple], None]. Customize verbose function with any print you want, input again con and var namedtuples.
     :param optimizer: Optional[str], default "adam". The optimizer for the optimization, check the support list in jax/experiments/optimizers.
     :return: NamedTuple, var. The optimized var NamedTuple.
     """
     f, g = get_fe(hansatz, h, hint)
-    opt_init, opt_update, get_params = getattr(optimizers, optimizer)(step_size=0.02)
+    opt_init, opt_update, get_params = getattr(optimizers, optimizer)(
+        step_size=step_size
+    )
     opt_state = opt_init(init_params)
 
     @jit
@@ -79,5 +84,8 @@ def mf_optimize(
         params = get_params(opt_state)
         if verbose_sep != 0:
             if t % verbose_sep == 0:
-                print(params, f(const_params, params))
+                if verbose_func is None:
+                    print(params, f(const_params, params))
+                else:
+                    verbose_func(const_params, params)
     return get_params(opt_state)
