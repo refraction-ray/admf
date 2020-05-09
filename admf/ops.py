@@ -1,3 +1,7 @@
+"""
+redefine gradient for some operations with numerical stability consideration
+"""
+
 from jax import numpy as jnp
 from jax import custom_jvp, custom_vjp
 

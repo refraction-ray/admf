@@ -1,3 +1,7 @@
+"""
+framework for mean field optimizations
+"""
+
 from jax import numpy as jnp
 from jax import grad, jit
 from jax.experimental import optimizers
@@ -44,6 +48,22 @@ def mf_optimize(
     verbose_sep=0,
     optimizer="adam",
 ):
+    """
+
+    :param hansatz: Callable[[NamedTuple, NamedTuple], np.ndarray]. Input const and var namedtuples,
+                    return the hamiltonian matrix of mean field ansatz non interacting Hamiltonian.
+    :param h: Callable[[NamedTuple, NamedTuple], np.ndarray]. Input const and var namedtuples,
+              return matrix of non interacting part of Hamiltonian under investigation
+    :param hint: Callable[[NamedTuple, NamedTuple, np.ndarray, np.ndarray], np.ndarray].
+                Input const, var namedtuples, together with e, v from ``e, v = np.linalg.eigh(hansatz(const, var))``.
+                return the numerical float value of free energy contribution from hint, <hint>0, which is defined via Wick expansion.
+    :param const_params: NamedTuple, const. variables in H or Hansatz but not changed.
+    :param init_params: NamedTuple, var. variables in Hansatz that is ready to be tuned for optimizations.
+    :param num_iter: int. Iteration steps.
+    :param verbose_sep: int. default 0 no verbose message in the training.
+    :param optimizer: Optional[str], default "adam". The optimizer for the optimization, check the support list in jax/experiments/optimizers.
+    :return: NamedTuple, var. The optimized var NamedTuple.
+    """
     f, g = get_fe(hansatz, h, hint)
     opt_init, opt_update, get_params = getattr(optimizers, optimizer)(step_size=0.02)
     opt_state = opt_init(init_params)
