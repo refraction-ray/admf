@@ -113,18 +113,6 @@ for site in loc:
         dubterm[loc[site], loc[nsite]] = 1
 
 
-# kinetic = jnp.asarray(kinetic)
-# rashbaterm = jnp.asarray(rashbaterm)
-# uuaterm = jnp.asarray(uuaterm)
-# ddaterm = jnp.asarray(ddaterm)
-# uubterm = jnp.asarray(uubterm)
-# ddbterm = jnp.asarray(ddbterm)
-# udaterm = jnp.asarray(udaterm)
-# duaterm = jnp.asarray(duaterm)
-# udbterm = jnp.asarray(udbterm)
-# dubterm = jnp.asarray(dubterm)
-
-
 def hansatz(const, var):
     return (
         const.t * kinetic
