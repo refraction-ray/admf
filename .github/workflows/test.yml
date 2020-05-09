@@ -1,0 +1,28 @@
+name: tests
+on: [push, pull_request]
+jobs:
+  tests:
+    runs-on: ${{ matrix.os }}
+    name: test
+    strategy:
+      matrix:
+        os: [ubuntu-18.04, macos-latest]
+        python-version: [3.6, 3.7] # tf doesn't support py3.8 now, shame
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v1
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --no-cache-dir -r requirements.txt
+          pip install pytest black
+      - name: black linter
+        run: |
+          black . --check
+      - name: test scripts
+        run: |
+          pytest -svv
