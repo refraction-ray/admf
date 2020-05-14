@@ -167,4 +167,4 @@ init_params = var(0.0, 0.5, 0.5, 0.0, 0.0, 0.0, 0.0)
 def test_honeycomb_rashba_hubbard():
     var_params = mf_optimize(hansatz, h, hint, const_params, init_params, 200, 50)
     f, _ = get_fe(hansatz, h, hint)
-    assert f(const_params, var_params) < -65.0
+    assert f(const_params, var_params) < -58.0

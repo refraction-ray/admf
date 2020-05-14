@@ -48,7 +48,7 @@ def mf_optimize(
     verbose_sep=0,
     verbose_func=None,
     optimizer="adam",
-    step_size=0.01,
+    step_size=0.001,
 ):
     """
 
@@ -65,6 +65,7 @@ def mf_optimize(
     :param verbose_sep: int. default 0 no verbose message in the training.
     :param verbose_func: Callable[[NamedTuple, NamedTuple], None]. Customize verbose function with any print you want, input again con and var namedtuples.
     :param optimizer: Optional[str], default "adam". The optimizer for the optimization, check the support list in jax/experiments/optimizers.
+    :param step_size: float, default 0.001, learning rate for optimizer
     :return: NamedTuple, var. The optimized var NamedTuple.
     """
     f, g = get_fe(hansatz, h, hint)
