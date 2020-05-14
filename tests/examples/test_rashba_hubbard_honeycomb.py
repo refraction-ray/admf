@@ -8,7 +8,7 @@ __here__ = os.path.abspath(__file__)
 __module_path__ = os.path.dirname(os.path.dirname(os.path.dirname(__here__)))
 sys.path.insert(0, __module_path__)
 
-from admf import mf_optimize, expectation, get_fe
+from admf import mf_optimize, expectation, get_fe, utils
 
 
 def generate_lattice(nx, ny):
@@ -79,10 +79,6 @@ for i, site in enumerate(generate_lattice(nx, ny)):
 uloc = [i for i in loc if i[3] == 0]
 
 
-def generate_zeros(n, size, dtype=np.complex64):
-    return [np.zeros([size, size], dtype=dtype) for _ in range(n)]
-
-
 (
     kinetic,
     rashbaterm,
@@ -94,7 +90,7 @@ def generate_zeros(n, size, dtype=np.complex64):
     duaterm,
     udbterm,
     dubterm,
-) = generate_zeros(10, len(loc))
+) = utils.generate_np_zeros(10, [len(loc), len(loc)])
 
 
 for site in loc:

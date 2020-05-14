@@ -9,7 +9,8 @@ __here__ = os.path.abspath(__file__)
 __module_path__ = os.path.dirname(os.path.dirname(os.path.dirname(__here__)))
 sys.path.insert(0, __module_path__)
 
-from admf import mf_optimize, expectation, get_fe
+from admf import mf_optimize, expectation, get_fe, utils
+
 
 dimensions = namedtuple("dimensions", ["nx", "ny"])
 basis = namedtuple("basis", ["x", "y", "spin"])
@@ -22,19 +23,11 @@ def generate_basis(dimensions):
                 yield basis(x, y, spin)
 
 
-loc = {}
-rloc = {}
-uloc = {}
 d = dimensions(2, 3)
-j = 0
-for i, site in enumerate(generate_basis(d)):
-    loc[site] = i
-    rloc[i] = site
-    if site.spin == 0:
-        uloc[site] = j
-        j += 1
 
+loc, rloc = utils.loc_index(generate_basis(d))
 hsize = len(loc)
+uloc, _ = utils.loc_index(generate_basis(d), lambda b: b.spin == 0)
 
 
 def nn(b, nx, ny):
@@ -61,13 +54,13 @@ def rashba(b, nx, ny, lmbd=1):
     yield r, -1.0 * lmbd * (-1) ** b.spin
 
 
-K, RS = [jnp.zeros([hsize, hsize], dtype=jnp.complex64) for _ in range(2)]
-
+K, RS = utils.generate_jnp_zeros(2, [hsize, hsize])
 for site in loc:
     for nsite in nn(site, d.nx, d.ny):
         K = K.at[loc[site], loc[nsite]].add(1.0)
     for nsite, rash in rashba(site, d.nx, d.ny):
         RS = RS.at[loc[site], loc[nsite]].add(rash)
+
 
 const = namedtuple("const", ["t", "lbd", "u", "beta"])
 var = namedtuple("var", ["mu", "xm", "ym", "zm"])
@@ -89,7 +82,7 @@ def hansatz(const, var):
             hm = hm.at[loc[site], loc[nsite]].add(
                 var.xm[uloc[nsite]] + 1.0j * var.ym[uloc[nsite]]
             )
-    hm += (var.mu) * jnp.eye(hsize)
+    hm += var.mu * jnp.eye(hsize)
     return hm
 
 
@@ -97,29 +90,9 @@ def h(const, var):
     return const.t * K + const.lbd * RS - 0.5 * const.u * jnp.eye(hsize)
 
 
-def hint(const, var, e, v):
-    energy = 0
-    for site in uloc:  # interaction part by wick expansion
-        nsite = spin_flip(site)
-        cross = expectation(loc[site], loc[nsite], const.beta, e, v)
-        energy += const.u * (
-            expectation(loc[site], loc[site], const.beta, e, v)
-            * expectation(loc[nsite], loc[nsite], const.beta, e, v)
-            - jnp.conj(cross) * cross
-        )
-    return energy
+hint = utils.hubbard_int(loc, uloc, spin_flip)
 
-
-def generate_random_matrix(n, shape, seed=42):
-    assert n >= 1
-    key = jax.random.PRNGKey(seed)
-    yield jax.random.normal(key, shape)
-    for _ in range(n - 1):
-        key, subkey = jax.random.split(key)
-        yield jax.random.normal(key, shape)
-
-
-t1, t2, t3 = generate_random_matrix(3, [int(len(loc) / 2)])
+t1, t2, t3 = utils.generate_jnp_random_normal(3, [int(len(loc) / 2)])
 
 init_params = var(0.0, t1, t2, t3)
 
