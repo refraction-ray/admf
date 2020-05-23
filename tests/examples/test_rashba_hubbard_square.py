@@ -1,8 +1,6 @@
 import os
 import sys
 from collections import namedtuple
-import numpy as np
-import jax
 from jax import numpy as jnp
 
 __here__ = os.path.abspath(__file__)
@@ -24,7 +22,6 @@ def generate_basis(dimensions):
 
 
 d = dimensions(2, 3)
-
 loc, rloc = utils.loc_index(generate_basis(d))
 hsize = len(loc)
 uloc, _ = utils.loc_index(generate_basis(d), lambda b: b.spin == 0)
@@ -37,16 +34,11 @@ def nn(b, nx, ny):
     yield basis((b.x + 1) % nx, b.y, b.spin)  # right
 
 
-def spin_flip(b):
-    return basis(b.x, b.y, 1 if b.spin == 0 else 0)
-
-
 def rashba(b, nx, ny, lmbd=1):
     spin = 1 if b.spin == 0 else 0
     r = basis(b.x, (b.y + 1) % ny, spin)
     yield r, 1.0j * lmbd
     r = basis(b.x, (b.y - 1) % ny, spin)
-    d = np.array([0, -1, 0])
     yield r, -1.0j * lmbd
     r = basis((b.x - 1) % nx, b.y, spin)
     yield r, 1.0 * lmbd * (-1) ** b.spin
@@ -70,7 +62,7 @@ def hansatz(const, var):
     # kinetic
     hm = const.t * K + const.lbd * RS
     for site in loc:
-        nsite = spin_flip(site)
+        nsite = utils.spin_flip(site)
         if site.spin == 0:  # up:
             hm = hm.at[loc[site], loc[site]].add(var.zm[uloc[site]])
             hm = hm.at[loc[site], loc[nsite]].add(
@@ -90,25 +82,13 @@ def h(const, var):
     return const.t * K + const.lbd * RS - 0.5 * const.u * jnp.eye(hsize)
 
 
-hint = utils.hubbard_int(loc, uloc, spin_flip)
+hint = utils.hubbard_int(loc)
 
 t1, t2, t3 = utils.generate_jnp_random_normal(3, [int(len(loc) / 2)])
 
 init_params = var(0.0, t1, t2, t3)
 
 result = namedtuple("result", ["const", "var", "energy", "s"])
-so = namedtuple("so", ["o", "x", "y", "z"])
-
-
-def get_S(site, beta, e, v):
-    usite = loc[basis(site.x, site.y, 0)]
-    dsite = loc[basis(site.x, site.y, 1)]
-    uu = expectation(usite, usite, beta, e, v)
-    ud = expectation(usite, dsite, beta, e, v)
-    du = expectation(dsite, usite, beta, e, v)
-    dd = expectation(dsite, dsite, beta, e, v)
-    return so(uu + dd, ud + du, 1j * (du - ud), uu - dd)
-
 
 f, _ = get_fe(hansatz, h, hint)
 
@@ -135,7 +115,7 @@ def test_square_rashba_hubbard():
     e, v = jnp.linalg.eigh(hansatz(const_params, var_params))
     r = {}
     for site in uloc:
-        r[site] = get_S(site, const_params.beta, e, v)
+        r[site] = utils.measure_S(loc, site, const_params.beta, e, v)
     assert f(const_params, var_params) < -21.2
 
     """
@@ -152,10 +132,8 @@ def test_square_rashba_hubbard():
     for k, v in r.items():
         x.append(k.x)
         y.append(k.y)
-        xy.append([k.x, k.y])
         sx.append(np.real(v.x))
         sy.append(np.real(v.y))
-        sxy.append([v.x, v.y])
         sz.append(np.real(v.z))
     plt.quiver(x, y, sx, sy, sz)
     """

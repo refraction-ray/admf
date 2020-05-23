@@ -11,14 +11,17 @@ sys.path.insert(0, __module_path__)
 from admf import mf_optimize, expectation, get_fe, utils
 
 
+basis = namedtuple("basis", ["x", "y", "sub", "spin"])
+
+
 def generate_lattice(nx, ny):
     i = 0
     j = 0
     while i < nx and j < ny:
-        yield (i, j, 0, 0)
-        yield (i, j, 0, 1)
-        yield (i, j, 1, 0)
-        yield (i, j, 1, 1)  # x, y, sublattice, spin
+        yield basis(i, j, 0, 0)
+        yield basis(i, j, 0, 1)
+        yield basis(i, j, 1, 0)
+        yield basis(i, j, 1, 1)
         i += 1
         if i >= nx:
             i = 0
@@ -26,138 +29,81 @@ def generate_lattice(nx, ny):
 
 
 def nn(t, nx, ny):
-    if t[2] == 0:  # A sublattice
-        yield ((t[0] - 1) % nx, (t[1] - 1) % ny, 1, t[3])
-        yield (t[0], (t[1] - 1) % ny, 1, t[3])
-        yield (t[0], t[1], 1, t[3])
-    elif t[2] == 1:  # B sublattice
-        yield (t[0], (t[1] + 1) % ny, 0, t[3])
-        yield ((t[0] + 1) % nx, (t[1] + 1) % ny, 0, t[3])
-        yield (t[0], t[1], 0, t[3])
+    if t.sub == 0:  # A sublattice
+        yield basis((t.x - 1) % nx, (t.y - 1) % ny, 1, t.spin)
+        yield basis(t.x, (t.y - 1) % ny, 1, t.spin)
+        yield basis(t.x, t.y, 1, t.spin)
+    elif t.sub == 1:  # B sublattice
+        yield basis(t.x, (t.y + 1) % ny, 0, t.spin)
+        yield basis((t.x + 1) % nx, (t.y + 1) % ny, 0, t.spin)
+        yield basis(t.x, t.y, 0, t.spin)
+
+
+def real_position(t):
+    return (
+        np.sqrt(3) * t.x - np.sqrt(3) / 2.0 * t.y,
+        -3 / 2 * t.y if t.sub == 0 else -3 / 2 * t.y - 1,
+    )
 
 
 def rashba(t, nx, ny, lmbd=1):
-    spin = 1 if t[3] == 0 else 0
-    if t[3] == 0:
+    if t.spin == 0:
         sigma = np.array([1, -1j, 0])
     else:
         sigma = np.array([1, 1j, 0])
-    if t[2] == 0:  # A sublattice
-        r = ((t[0] - 1) % nx, (t[1] - 1) % ny, 1, spin)
-        d = np.array([-np.sqrt(3) / 2, -1 / 2, 0])
-        yield r, 1j * lmbd * np.cross(sigma, d)[2]
-        r = (t[0], (t[1] - 1) % ny, 1, spin)
-        d = np.array([np.sqrt(3) / 2, -1 / 2, 0])
-        yield r, 1j * lmbd * np.cross(sigma, d)[2]
-        r = (t[0], t[1], 1, spin)
-        d = np.array([0, 1, 0])
-        yield r, 1j * lmbd * np.cross(sigma, d)[2]
-    elif t[2] == 1:  # B sublattice
-        r = (t[0], (t[1] + 1) % ny, 0, spin)
-        d = np.array([-np.sqrt(3) / 2, 1 / 2, 0])
-        yield r, 1j * lmbd * np.cross(sigma, d)[2]
-        r = ((t[0] + 1) % nx, (t[1] + 1) % ny, 0, spin)
-        d = np.array([np.sqrt(3) / 2, 1 / 2, 0])
-        yield r, 1j * lmbd * np.cross(sigma, d)[2]
-        r = (t[0], t[1], 0, spin)
-        d = np.array([0, -1, 0])
-        yield r, 1j * lmbd * np.cross(sigma, d)[2]
-
-
-def flip_spin(t):
-    nt = list(t)
-    nt[3] = 1 if t[3] == 0 else 0
-    nt = tuple(nt)
-    return nt
+    for site in nn(t, nx, ny):
+        dsite = utils.spin_flip(site)
+        dx, dy = real_position(dsite)
+        ux, uy = real_position(dsite)
+        d = np.array([dx - ux, dy - uy, 0.0])
+        yield dsite, 1j * lmbd * np.cross(sigma, d)[2]
 
 
 nx = 3
 ny = 3
-loc = {}
-for i, site in enumerate(generate_lattice(nx, ny)):
-    loc[site] = i  # index dict
-uloc = [i for i in loc if i[3] == 0]
-
-
-(
-    kinetic,
-    rashbaterm,
-    uuaterm,
-    ddaterm,
-    uubterm,
-    ddbterm,
-    udaterm,
-    duaterm,
-    udbterm,
-    dubterm,
-) = utils.generate_np_zeros(10, [len(loc), len(loc)])
-
-
+loc, _ = utils.loc_index(generate_lattice(nx, ny))
+uloc, _ = utils.loc_index(generate_lattice(nx, ny), lambda t: t.spin == 0)
+hsize = len(loc)
+K, RS = utils.generate_np_zeros(2, [hsize, hsize])
 for site in loc:
     for hopsite in nn(site, nx, ny):
-        kinetic[loc[site], loc[hopsite]] = 1
+        K[loc[site], loc[hopsite]] = 1
     for rashbasite, lam in rashba(site, nx, ny):
-        rashbaterm[loc[site], loc[rashbasite]] = lam
-
-    if site[3] == 0 and site[2] == 0:
-        uuaterm[loc[site], loc[site]] = 1
-        nsite = flip_spin(site)
-        udaterm[loc[site], loc[nsite]] = 1
-    elif site[3] == 0 and site[2] == 1:
-        uubterm[loc[site], loc[site]] = 1
-        nsite = flip_spin(site)
-        udbterm[loc[site], loc[nsite]] = 1
-    elif site[3] == 1 and site[2] == 0:
-        ddaterm[loc[site], loc[site]] = 1
-        nsite = flip_spin(site)
-        duaterm[loc[site], loc[nsite]] = 1
-    else:
-        ddbterm[loc[site], loc[site]] = 1
-        nsite = flip_spin(site)
-        dubterm[loc[site], loc[nsite]] = 1
+        RS[loc[site], loc[rashbasite]] = lam
 
 
 def hansatz(const, var):
-    return (
-        const.t * kinetic
-        + const.lbd * rashbaterm
-        + const.u / 2 * var.mua * uuaterm
-        + const.u / 2 * (1 - var.mua) * ddaterm
-        + const.u / 2 * (1 - var.mub) * ddbterm
-        + const.u / 2 * var.mub * uubterm
-        + var.mu * (uuaterm + uubterm + ddaterm + ddbterm)
-        - const.u / 2 * (var.deltaa + 1.0j * var.deltaai) * udaterm
-        - const.u / 2 * (var.deltaa - 1.0j * var.deltaai) * duaterm
-        - const.u / 2 * (var.deltab + 1.0j * var.deltabi) * udbterm
-        - const.u / 2 * (var.deltab - 1.0j * var.deltabi) * dubterm
-    )
+    hm = const.t * K + const.lbd * RS
+    for site in loc:
+        nsite = utils.spin_flip(site)
+        if site.spin == 0:  # up:
+            hm = hm.at[loc[site], loc[site]].add(var.zm[uloc[site]])
+            hm = hm.at[loc[site], loc[nsite]].add(
+                var.xm[uloc[site]] - 1.0j * var.ym[uloc[site]]
+            )
+
+        else:
+            hm = hm.at[loc[site], loc[site]].add(-var.zm[uloc[nsite]])
+            hm = hm.at[loc[site], loc[nsite]].add(
+                var.xm[uloc[nsite]] + 1.0j * var.ym[uloc[nsite]]
+            )
+    hm += var.mu * jnp.eye(hsize)
+    return hm
 
 
 def h(const, var):
-    return (
-        (-0.5 * const.u) * (uuaterm + uubterm + ddaterm + ddbterm)
-        + const.t * kinetic
-        + const.lbd * rashbaterm
-    )
+    return const.t * K + const.lbd * RS - 0.5 * const.u * jnp.eye(hsize)
 
 
-def hint(const, var, e, v):
-    energy = 0
-    for site in uloc:  # interaction part by wick expansion
-        nsite = flip_spin(site)
-        cross = expectation(loc[site], loc[nsite], const.beta, e, v)
-        energy += const.u * (
-            expectation(loc[site], loc[site], const.beta, e, v)
-            * expectation(loc[nsite], loc[nsite], const.beta, e, v)
-            - jnp.conj(cross) * cross
-        )
-    return energy
+hint = utils.hubbard_int(loc)
 
 
 const = namedtuple("const", ["t", "lbd", "u", "beta"])
-var = namedtuple("var", ["mu", "mua", "mub", "deltaa", "deltab", "deltaai", "deltabi"])
+var = namedtuple("var", ["mu", "xm", "ym", "zm"])
+t1, t2, t3 = utils.generate_jnp_random_normal(3, [int(hsize / 2)])
+
+init_params = var(0.0, t1, t2, t3)
 const_params = const(1.0, 1.0, 6.0, 5.0)
-init_params = var(0.0, 0.5, 0.5, 0.0, 0.0, 0.0, 0.0)
 
 
 def test_honeycomb_rashba_hubbard():
