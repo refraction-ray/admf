@@ -1,4 +1,4 @@
-from collections import namedtuple
+from functools import wraps
 import jax
 import numpy as np
 from jax import numpy as jnp
@@ -54,7 +54,25 @@ def spin_flip(b, attr="spin", flip_func=None):
     return type(b)(*l)
 
 
-mo = namedtuple("mo", ["o", "x", "y", "z"])
+def site_mod(t, pbc_dict=None):
+    l = []
+    if pbc_dict is None:
+        return t
+    for f in t._fields:
+        if f in pbc_dict:
+            l.append(getattr(t, f) % pbc_dict[f])
+        else:
+            l.append(getattr(t, f))
+    return type(t)(*l)
+
+
+def pbc(nn):
+    @wraps(nn)
+    def wrapper(t, pbc_dict=None):
+        for nt in nn(t):
+            yield site_mod(nt, pbc_dict)
+
+    return wrapper
 
 
 def measure_S(loc, site, beta, e, v):
@@ -64,7 +82,7 @@ def measure_S(loc, site, beta, e, v):
     ud = expectation(usite, dsite, beta, e, v)
     du = expectation(dsite, usite, beta, e, v)
     dd = expectation(dsite, dsite, beta, e, v)
-    return mo(uu + dd, ud + du, 1j * (du - ud), uu - dd)
+    return {"o": uu + dd, "x": ud + du, "y": 1j * (du - ud), "z": uu - dd}
 
 
 def hubbard_int(loc, uloc=None, spin_flip_func=None, u="u"):

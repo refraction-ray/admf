@@ -15,28 +15,26 @@ basis = namedtuple("basis", ["x", "y", "sub", "spin"])
 
 
 def generate_lattice(nx, ny):
-    i = 0
-    j = 0
-    while i < nx and j < ny:
-        yield basis(i, j, 0, 0)
-        yield basis(i, j, 0, 1)
-        yield basis(i, j, 1, 0)
-        yield basis(i, j, 1, 1)
-        i += 1
-        if i >= nx:
-            i = 0
-            j += 1
+    for i in range(nx):
+        for j in range(ny):
+            yield basis(i, j, 0, 0)
+            yield basis(i, j, 0, 1)
+            yield basis(i, j, 1, 0)
+            yield basis(i, j, 1, 1)
 
 
-def nn(t, nx, ny):
+def nn(t):
     if t.sub == 0:  # A sublattice
-        yield basis((t.x - 1) % nx, (t.y - 1) % ny, 1, t.spin)
-        yield basis(t.x, (t.y - 1) % ny, 1, t.spin)
+        yield basis((t.x - 1), (t.y - 1), 1, t.spin)
+        yield basis(t.x, (t.y - 1), 1, t.spin)
         yield basis(t.x, t.y, 1, t.spin)
     elif t.sub == 1:  # B sublattice
-        yield basis(t.x, (t.y + 1) % ny, 0, t.spin)
-        yield basis((t.x + 1) % nx, (t.y + 1) % ny, 0, t.spin)
+        yield basis(t.x, (t.y + 1), 0, t.spin)
+        yield basis((t.x + 1), (t.y + 1), 0, t.spin)
         yield basis(t.x, t.y, 0, t.spin)
+
+
+pnn = utils.pbc(nn)
 
 
 def real_position(t):
@@ -51,12 +49,15 @@ def rashba(t, nx, ny, lmbd=1):
         sigma = np.array([1, -1j, 0])
     else:
         sigma = np.array([1, 1j, 0])
-    for site in nn(t, nx, ny):
-        dsite = utils.spin_flip(site)
-        dx, dy = real_position(dsite)
-        ux, uy = real_position(dsite)
+    for site in nn(t):
+        psite = utils.site_mod(site, {"x": nx, "y": ny})
+        dsite = utils.spin_flip(psite)
+        dx, dy = real_position(site)
+        ux, uy = real_position(t)
         d = np.array([dx - ux, dy - uy, 0.0])
-        yield dsite, 1j * lmbd * np.cross(sigma, d)[2]
+        cr = np.cross(sigma, d)[2]
+        cr = cr / np.linalg.norm(cr)
+        yield dsite, 1j * lmbd * cr
 
 
 nx = 3
@@ -66,7 +67,7 @@ uloc, _ = utils.loc_index(generate_lattice(nx, ny), lambda t: t.spin == 0)
 hsize = len(loc)
 K, RS = utils.generate_np_zeros(2, [hsize, hsize])
 for site in loc:
-    for hopsite in nn(site, nx, ny):
+    for hopsite in pnn(site, {"x": nx, "y": ny}):
         K[loc[site], loc[hopsite]] = 1
     for rashbasite, lam in rashba(site, nx, ny):
         RS[loc[site], loc[rashbasite]] = lam
