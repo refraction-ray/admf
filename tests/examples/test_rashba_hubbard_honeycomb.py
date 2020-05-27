@@ -64,6 +64,13 @@ nx = 3
 ny = 3
 loc, _ = utils.loc_index(generate_lattice(nx, ny))
 uloc, _ = utils.loc_index(generate_lattice(nx, ny), lambda t: t.spin == 0)
+nloc = uloc
+# nloc = {}
+# for site in uloc:
+#     if site.sub == 0:
+#         nloc[site] = 0
+#     else:
+#         nloc[site] = 1
 hsize = len(loc)
 K, RS = utils.generate_np_zeros(2, [hsize, hsize])
 for site in loc:
@@ -78,15 +85,15 @@ def hansatz(const, var):
     for site in loc:
         nsite = utils.spin_flip(site)
         if site.spin == 0:  # up:
-            hm = hm.at[loc[site], loc[site]].add(var.zm[uloc[site]])
+            hm = hm.at[loc[site], loc[site]].add(var.zm[nloc[site]])
             hm = hm.at[loc[site], loc[nsite]].add(
-                var.xm[uloc[site]] - 1.0j * var.ym[uloc[site]]
+                var.xm[nloc[site]] - 1.0j * var.ym[nloc[site]]
             )
 
         else:
-            hm = hm.at[loc[site], loc[site]].add(-var.zm[uloc[nsite]])
+            hm = hm.at[loc[site], loc[site]].add(-var.zm[nloc[nsite]])
             hm = hm.at[loc[site], loc[nsite]].add(
-                var.xm[uloc[nsite]] + 1.0j * var.ym[uloc[nsite]]
+                var.xm[nloc[nsite]] + 1.0j * var.ym[nloc[nsite]]
             )
     hm += var.mu * jnp.eye(hsize)
     return hm
